@@ -1,0 +1,57 @@
+import streamlit as st
+import cv2
+from ultralytics import YOLO
+import tempfile
+import numpy as np
+
+st.title("Détection de personnes en temps réel")
+
+# Charger le modèle YOLO
+model = YOLO("yolov8n.pt")
+
+LIMIT = 25  # nombre maximum de personnes
+
+# Bouton pour démarrer la caméra
+if st.button("Démarrer la caméra"):
+    stframe = st.empty()  # placeholder pour la vidéo
+
+    cap = cv2.VideoCapture(0)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.warning("Impossible de lire la caméra")
+            break
+
+        # Détection
+        results = model(frame)
+        person_count = 0
+
+        for result in results:
+            for box in result.boxes:
+                cls = int(box.cls[0])
+                confidence = float(box.conf[0])
+
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                height = y2 - y1
+
+                if cls == 0 and confidence > 0.5 and height > 100:
+                    person_count += 1
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(frame, f"{confidence:.2f}", (x1, y1-10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        cv2.putText(frame, f"Personnes: {person_count}", (10, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        if person_count > LIMIT:
+            cv2.putText(frame, "ALERTE: LIMITE DEPASSEE!", (10, 80),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+
+        # Convertir BGR → RGB pour Streamlit
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Afficher la frame
+        stframe.image(frame, channels="RGB")
+
+    cap.release()
